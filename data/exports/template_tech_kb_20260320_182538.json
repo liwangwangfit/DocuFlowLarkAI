@@ -1,0 +1,69 @@
+{
+  "name": "技术文档",
+  "description": "适用于研发团队的技术文档结构",
+  "structure": [
+    {
+      "id": "t1",
+      "name": "00-技术规范33",
+      "type": "folder",
+      "children": [
+        {
+          "id": "t1-1",
+          "name": "编码规范33",
+          "type": "folder"
+        },
+        {
+          "id": "t1-2",
+          "name": "架构设计规范",
+          "type": "folder"
+        },
+        {
+          "id": "node_1773477168.008314",
+          "name": "123",
+          "type": "folder",
+          "children": [
+            {
+              "id": "node_1773477173.03502",
+              "name": "321",
+              "type": "folder",
+              "children": []
+            },
+            {
+              "id": "node_1773477231.895646",
+              "name": "合同交易书",
+              "type": "folder",
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "t2",
+      "name": "01-开发文档",
+      "type": "folder",
+      "children": [
+        {
+          "id": "t2-1",
+          "name": "后端开发",
+          "type": "folder",
+          "children": [
+            {
+              "id": "t2-1-1",
+              "name": "API设计",
+              "type": "folder",
+              "children": [
+                {
+                  "id": "node_1773408807.114227",
+                  "name": "API测试",
+                  "type": "folder",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "测试导入模板",
+  "description": "通过API导入的测试模板",
+  "structure": [
+    {
+      "id": "test1",
+      "name": "测试文件夹1",
+      "type": "folder",
+      "children": [
+        {
+          "id": "test1-1",
+          "name": "子文档1",
+          "type": "folder"
+        }
+      ]
+    },
+    {
+      "id": "test2",
+      "name": "测试文件夹2",
+      "type": "folder"
+    }
+  ]
+}
