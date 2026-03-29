@@ -48,7 +48,7 @@ def calculate_dynamic_workers(
     total_files: int,
     *,
     min_workers: int = 1,
-    max_workers: int = 12,
+    max_workers: int = 5,
 ) -> Tuple[int, Dict[str, float]]:
     """
     根据当前系统资源动态计算推荐并发 worker 数量。

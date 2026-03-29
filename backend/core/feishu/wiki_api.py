@@ -1,6 +1,7 @@
 """
 飞书知识库API封装 - 使用 user_access_token
 """
+import asyncio
 import httpx
 from typing import List, Dict, Optional, Any
 from loguru import logger
@@ -336,61 +337,80 @@ class FeishuWikiAPI:
         return None
     
     async def create_structure(self, space_id: str, structure: List[Dict],
-                              parent_token: Optional[str] = None) -> Dict[str, str]:
+                              parent_token: Optional[str] = None,
+                              max_concurrent: int = 5) -> Dict[str, str]:
         """
-        批量创建知识库结构（带存在性检查）
+        批量创建知识库结构（带存在性检查，同级节点并发创建）
         
-        如果节点已存在则复用，不存在则创建
+        如果节点已存在则复用，不存在则创建。
+        同一父节点下的兄弟节点并发创建，子节点必须在父节点创建完成后才能开始。
         
         Args:
             space_id: 知识空间ID
             structure: 结构定义，格式为 [{"name": "xxx", "children": [...]}, ...]
             parent_token: 父节点token
+            max_concurrent: 最大并发数（防止API限流）
             
         Returns:
             节点路径到token的映射
         """
-        node_map = {}
-        
-        async def create_recursive(items: List[Dict], parent: Optional[str] = None, path: str = ""):
-            for item in items:
-                title = item.get("name", "未命名")
-                current_path = f"{path}/{title}" if path else title
-                
+        node_map: Dict[str, str] = {}
+        sem = asyncio.Semaphore(max_concurrent)
+
+        async def create_or_find_single(item: Dict, parent: Optional[str], path: str):
+            """查找或创建单个节点（受信号量保护）"""
+            title = item.get("name", "未命名")
+            current_path = f"{path}/{title}" if path else title
+
+            async with sem:
                 try:
-                    # 先检查节点是否已存在
                     existing_token = await self.find_node_by_title(
                         space_id=space_id,
                         title=title,
                         parent_token=parent
                     )
-                    
+
                     if existing_token:
-                        # 节点已存在，复用
                         node_token = existing_token
                         node_map[current_path] = node_token
                         logger.info(f"复用已存在节点: {current_path}")
                     else:
-                        # 节点不存在，创建新节点
                         node_result = await self.create_node(
                             space_id=space_id,
                             title=title,
                             parent_node_token=parent,
-                            obj_type="docx"  # 默认创建文档
+                            obj_type="docx"
                         )
                         node_token = node_result["node_token"]
                         node_map[current_path] = node_token
                         logger.info(f"创建节点: {current_path}")
-                    
-                    # 递归创建子节点
-                    children = item.get("children", [])
-                    if children:
-                        await create_recursive(children, node_token, current_path)
-                
+
+                    return node_token, current_path, item.get("children", [])
+
                 except Exception as e:
                     logger.error(f"创建节点失败 {current_path}: {e}")
-        
-        await create_recursive(structure, parent_token)
+                    return None, current_path, []
+
+        async def create_level(items: List[Dict], parent: Optional[str], path: str):
+            """并发创建同一层级的所有兄弟节点，然后递归处理各自的子节点"""
+            results = await asyncio.gather(
+                *(create_or_find_single(item, parent, path) for item in items),
+                return_exceptions=True
+            )
+
+            child_tasks = []
+            for result in results:
+                if isinstance(result, BaseException):
+                    logger.error(f"节点创建任务异常: {result}")
+                    continue
+                node_token, current_path, children = result
+                if node_token and children:
+                    child_tasks.append(create_level(children, node_token, current_path))
+
+            if child_tasks:
+                await asyncio.gather(*child_tasks, return_exceptions=True)
+
+        await create_level(structure, parent_token, "")
         return node_map
 
     

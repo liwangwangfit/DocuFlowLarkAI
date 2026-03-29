@@ -1390,6 +1390,33 @@ def _read_file_preview(file_path: str, file_name: str) -> str:
                 return f"Word文档: {file_name}"
         if ext in [".xlsx", ".xls", ".csv"]:
             return f"电子表格: {file_name}"
+        if ext in [".pptx", ".ppt"]:
+            try:
+                from pptx import Presentation
+                prs = Presentation(file_path)
+                texts = []
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        if shape.has_text_frame:
+                            for para in shape.text_frame.paragraphs:
+                                t = para.text.strip()
+                                if t:
+                                    texts.append(t)
+                return "\n".join(texts)[:5000] or f"PowerPoint: {file_name}"
+            except Exception:
+                return f"PowerPoint: {file_name}"
+        if ext == ".xmind":
+            return f"XMind思维导图: {file_name}"
+        if ext == ".mm":
+            return f"FreeMind思维导图: {file_name}"
+        if ext == ".opml":
+            try:
+                from xml.etree import ElementTree as ET
+                tree = ET.parse(file_path)
+                texts = [el.get("text", "") for el in tree.iter("outline") if el.get("text")]
+                return "\n".join(texts)[:5000] or f"OPML: {file_name}"
+            except Exception:
+                return f"OPML: {file_name}"
         return f"文件: {file_name}"
     except Exception:
         return f"文件: {file_name}"
@@ -1424,8 +1451,11 @@ async def run_migration_task(task_id: str):
         await manager.send_progress(task_id, 100, "完成（无文件）")
         return
 
+    FEISHU_MAX_CONCURRENT_UPLOADS = 5
+
     processable_files_count = len(files)
     workers, worker_detail = calculate_dynamic_workers(max(processable_files_count, 1))
+    workers = min(workers, FEISHU_MAX_CONCURRENT_UPLOADS)
     semaphore = asyncio.Semaphore(workers)
     runtime_started = time.perf_counter()
     chart_points: List[Dict[str, Any]] = []
@@ -1564,6 +1594,7 @@ async def run_migration_task(task_id: str):
         async def process_single_file(index: int, file_info: Dict[str, Any]):
             file_failed = False
             file_processed = False
+            file_partial = False
             file_name = file_info["name"]
             file_path = file_info["path"]
             status_index = duplicate_offset + index
@@ -1572,7 +1603,10 @@ async def run_migration_task(task_id: str):
                 async with task_state_lock:
                     file_status_list[status_index]["status"] = "processing"
                     file_status_list[status_index]["progress"] = 15
-                await publish_runtime(f"处理中 {status_index + 1}/{total_files}: {file_name}")
+                try:
+                    await publish_runtime(f"处理中 {status_index + 1}/{total_files}: {file_name}")
+                except Exception:
+                    pass
 
                 try:
                     await manager.send_log("Import", f"开始处理: {file_name}", "info")
@@ -1635,24 +1669,28 @@ async def run_migration_task(task_id: str):
                             title=doc_title,
                         )
                         await manager.send_log("Feishu", f"移动成功: {move_result.get('url', '')}", "success")
+                        file_processed = True
                         async with task_state_lock:
                             file_status_list[status_index]["status"] = "success"
                             file_status_list[status_index]["progress"] = 100
                     except Exception as move_error:
                         logger.error(f"移动文档失败: {move_error}")
                         await manager.send_log("Feishu", f"移动失败: {move_error}", "error")
+                        file_partial = True
                         async with task_state_lock:
                             file_status_list[status_index]["status"] = "partial"
                             file_status_list[status_index]["progress"] = 80
 
-                    file_processed = True
                     async with task_state_lock:
                         app_state["stats"]["api_calls"] += 4
 
                 except Exception as file_error:
                     file_failed = True
                     logger.error(f"处理文件失败 {file_name}: {file_error}")
-                    await manager.send_log("Task", f"{file_name} 处理失败: {file_error}", "error")
+                    try:
+                        await manager.send_log("Task", f"{file_name} 处理失败: {file_error}", "error")
+                    except Exception:
+                        pass
                     async with task_state_lock:
                         file_status_list[status_index]["status"] = "failed"
                         file_status_list[status_index]["progress"] = 0
@@ -1662,16 +1700,27 @@ async def run_migration_task(task_id: str):
                         if file_processed:
                             runtime["processed"] += 1
                             app_state["stats"]["processed"] += 1
-                        if file_failed:
+                        if file_failed or file_partial:
                             runtime["failed"] += 1
                             app_state["stats"]["failed"] += 1
 
-                    await publish_runtime(f"已完成 {runtime['completed']}/{total_files}")
+                    try:
+                        await publish_runtime(f"已完成 {runtime['completed']}/{total_files}")
+                    except Exception:
+                        pass
 
         await asyncio.gather(
             *(process_single_file(idx, info) for idx, info in enumerate(files)),
-            return_exceptions=False,
+            return_exceptions=True,
         )
+
+        # Bug-fix: send definitive final panorama + stats after all files complete
+        await manager.send_panorama(
+            task_id=task_id,
+            space_structure=template.get("structure", []) if template else [],
+            file_status=_snapshot_file_status(file_status_list),
+        )
+        await manager.send_stats(dict(app_state["stats"]))
 
         task["status"] = "completed"
         task["progress"] = 100

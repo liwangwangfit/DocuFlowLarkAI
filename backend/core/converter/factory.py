@@ -9,6 +9,8 @@ from .base import BaseConverter, DocumentType
 from .pdf_converter import PDFConverter
 from .excel_converter import ExcelConverter
 from .doc_converter import DocConverter
+from .pptx_converter import PPTXConverter
+from .mindmap_converter import MindMapConverter
 
 
 class ConverterFactory:
@@ -24,6 +26,8 @@ class ConverterFactory:
             cls.register(PDFConverter())
             cls.register(ExcelConverter())
             cls.register(DocConverter())
+            cls.register(PPTXConverter())
+            cls.register(MindMapConverter())
             cls._initialized = True
     
     @classmethod
@@ -36,12 +40,19 @@ class ConverterFactory:
     def get_converter(cls, file_path: str) -> Optional[BaseConverter]:
         """根据文件路径获取合适的转换器"""
         cls._ensure_initialized()
-        
+
+        ext = Path(file_path).suffix.lower()
+
+        # MindMapConverter uses extension-based dispatch
+        for converter in cls._converters:
+            if hasattr(converter, "supports_extension") and converter.supports_extension(ext):
+                return converter
+
         doc_type = cls._detect_type(file_path)
         for converter in cls._converters:
             if converter.supports(doc_type):
                 return converter
-        
+
         logger.warning(f"未找到支持 {doc_type} 的转换器")
         return None
     
@@ -62,6 +73,9 @@ class ConverterFactory:
             '.htm': DocumentType.HTML,
             '.ppt': DocumentType.PPT,
             '.pptx': DocumentType.PPTX,
+            '.xmind': DocumentType.XMIND,
+            '.mm': DocumentType.FREEMIND,
+            '.opml': DocumentType.OPML,
         }
         
         return type_map.get(ext, DocumentType.TXT)
@@ -69,7 +83,10 @@ class ConverterFactory:
     @classmethod
     def list_supported_types(cls) -> List[str]:
         """列出支持的文件类型"""
-        return ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.md']
+        return [
+            '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.md',
+            '.html', '.csv', '.pptx', '.ppt', '.xmind', '.mm', '.opml',
+        ]
     
     @classmethod
     def is_supported(cls, file_path: str) -> bool:
