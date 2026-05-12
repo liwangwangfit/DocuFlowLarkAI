@@ -172,18 +172,16 @@ class TestFileTypeMap:
             assert ext in FeishuDriveAPI.FILE_TYPE_MAP
             assert FeishuDriveAPI.FILE_TYPE_MAP[ext][0] == "sheet"
 
-    def test_pptx_in_file_type_map(self):
+    def test_pptx_not_imported_as_native_file_type(self):
         from core.feishu.drive_api import FeishuDriveAPI
 
-        assert "pptx" in FeishuDriveAPI.FILE_TYPE_MAP
-        assert FeishuDriveAPI.FILE_TYPE_MAP["pptx"] == ("docx", "pptx")
+        assert "pptx" not in FeishuDriveAPI.FILE_TYPE_MAP
 
-    def test_mindmap_types_in_file_type_map(self):
+    def test_mindmap_types_not_imported_as_native_file_types(self):
         from core.feishu.drive_api import FeishuDriveAPI
 
         for ext in ("xmind", "mm", "opml"):
-            assert ext in FeishuDriveAPI.FILE_TYPE_MAP
-            assert FeishuDriveAPI.FILE_TYPE_MAP[ext][0] == "docx"
+            assert ext not in FeishuDriveAPI.FILE_TYPE_MAP
 
     def test_unsupported_extension_raises(self):
         from core.feishu.drive_api import FeishuDriveAPI
@@ -313,6 +311,40 @@ class TestPPTXConverter:
         assert result.output_path is not None
         assert Path(result.output_path).exists()
         assert Path(result.output_path).suffix == ".docx"
+        tmp.unlink(missing_ok=True)
+
+
+class TestFeishuImportPreparation:
+
+    @pytest.mark.asyncio
+    async def test_direct_import_type_is_unchanged(self):
+        from main import _prepare_file_for_feishu_import
+
+        tmp = Path(tempfile.mktemp(suffix=".md"))
+        tmp.write_text("# Direct", encoding="utf-8")
+
+        result = await _prepare_file_for_feishu_import(str(tmp))
+
+        assert result == str(tmp)
+        tmp.unlink(missing_ok=True)
+
+    @pytest.mark.asyncio
+    async def test_opml_is_converted_to_markdown_before_import(self):
+        from main import _prepare_file_for_feishu_import
+
+        opml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head><title>Import OPML</title></head>
+  <body><outline text="Topic"/></body>
+</opml>"""
+        tmp = Path(tempfile.mktemp(suffix=".opml"))
+        tmp.write_text(opml_content, encoding="utf-8")
+
+        result = await _prepare_file_for_feishu_import(str(tmp))
+
+        assert Path(result).suffix == ".md"
+        assert Path(result).exists()
+        assert "Topic" in Path(result).read_text(encoding="utf-8")
         tmp.unlink(missing_ok=True)
 
 

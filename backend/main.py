@@ -3,6 +3,7 @@ FastAPI 主入口
 """
 import asyncio
 import json
+import tempfile
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -1422,6 +1423,38 @@ def _read_file_preview(file_path: str, file_name: str) -> str:
         return f"文件: {file_name}"
 
 
+async def _prepare_file_for_feishu_import(file_path: str) -> str:
+    """Convert formats that Feishu import does not accept directly."""
+    direct_import_exts = {
+        ".docx", ".doc", ".txt", ".md", ".mark", ".markdown", ".html",
+        ".xlsx", ".csv", ".xls",
+    }
+    source = Path(file_path)
+    if source.suffix.lower() in direct_import_exts:
+        return file_path
+
+    from core.converter.factory import ConverterFactory
+
+    converter = ConverterFactory.get_converter(file_path)
+    if converter is None:
+        return file_path
+
+    result = await converter.convert(file_path)
+    if not result.success:
+        raise RuntimeError(result.error_message or f"文件转换失败: {source.name}")
+
+    if result.output_path:
+        return result.output_path
+
+    if result.content is not None:
+        output_dir = Path(tempfile.mkdtemp(prefix="docuflow_import_"))
+        output_path = output_dir / f"{source.stem}.md"
+        output_path.write_text(result.content, encoding="utf-8")
+        return str(output_path)
+
+    raise RuntimeError(f"文件转换未生成可导入内容: {source.name}")
+
+
 def _snapshot_file_status(file_status: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [dict(item) for item in file_status]
 
@@ -1624,8 +1657,13 @@ async def run_migration_task(task_id: str):
                             app_state["stats"]["tokens"] += summary_tokens
                         file_status_list[status_index]["progress"] = 35
 
-                    await manager.send_log("Import", f"导入文件: {file_name}", "info")
-                    import_result = await drive_api.import_file(file_path)
+                    import_file_path = await _prepare_file_for_feishu_import(file_path)
+                    import_file_name = Path(import_file_path).name
+                    if import_file_path != file_path:
+                        await manager.send_log("Converter", f"转换完成: {file_name} -> {import_file_name}", "success")
+
+                    await manager.send_log("Import", f"导入文件: {import_file_name}", "info")
+                    import_result = await drive_api.import_file(import_file_path)
                     doc_token = import_result["token"]
                     doc_type = import_result["type"]
                     doc_title = import_result["title"]

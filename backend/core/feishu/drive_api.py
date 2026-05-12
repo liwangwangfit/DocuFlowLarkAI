@@ -30,12 +30,6 @@ class FeishuDriveAPI:
         "xlsx": ("sheet", "xlsx"),
         "csv": ("sheet", "csv"),
         "xls": ("sheet", "xls"),
-        # PPT -> 导入为 docx（飞书知识库原生支持）
-        "pptx": ("docx", "pptx"),
-        # 思维导图 -> 导入为 docx（飞书知识库原生支持）
-        "xmind": ("docx", "xmind"),
-        "mm": ("docx", "mm"),
-        "opml": ("docx", "opml"),
     }
     
     async def _get_headers(self, content_type: str = "application/json") -> Dict[str, str]:
