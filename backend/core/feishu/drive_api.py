@@ -16,7 +16,7 @@ class FeishuDriveAPI:
     
     BASE_URL = "https://open.feishu.cn/open-apis"
     
-    # 文件类型映射
+    # 文件类型映射：扩展名 -> (飞书目标类型, 上传时的 file_extension)
     FILE_TYPE_MAP = {
         # 文档类型 -> 导入为 docx
         "docx": ("docx", "docx"),
@@ -199,7 +199,7 @@ class FeishuDriveAPI:
     
     async def import_file(self, file_path: str, max_retries: int = 60, retry_interval: int = 2) -> Dict[str, Any]:
         """
-        完整的文件导入流程（上传+导入+轮询结果）
+        完整的文件导入流程（上传 + 导入 + 轮询结果）
         
         Args:
             file_path: 本地文件路径
@@ -214,6 +214,7 @@ class FeishuDriveAPI:
             - url: 文档URL
         """
         path = Path(file_path)
+        original_title = path.stem
         
         # 获取文件类型信息
         obj_type, file_extension = self._get_file_type_info(file_path)
@@ -226,7 +227,7 @@ class FeishuDriveAPI:
             file_token=file_token,
             file_extension=file_extension,
             import_type=obj_type,
-            file_name=path.stem
+            file_name=original_title
         )
         
         # 步骤3: 轮询导入结果
@@ -246,7 +247,7 @@ class FeishuDriveAPI:
                 
                 doc_token = result.get("token")
                 doc_url = result.get("url")
-                doc_title = result.get("file_name") or path.stem
+                doc_title = result.get("file_name") or original_title
                 
                 # 兼容处理：检查其他可能的字段名
                 if not doc_token:

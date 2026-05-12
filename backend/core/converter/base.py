@@ -19,6 +19,9 @@ class DocumentType(Enum):
     HTML = "html"
     PPT = "ppt"
     PPTX = "pptx"
+    XMIND = "xmind"
+    FREEMIND = "mm"
+    OPML = "opml"
 
 
 class ConversionResult(BaseModel):

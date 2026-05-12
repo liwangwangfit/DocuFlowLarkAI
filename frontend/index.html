@@ -739,8 +739,8 @@
                              ondragleave="handleDragLeave(event)">
                             <i class="fa-solid fa-cloud-arrow-up text-4xl text-slate-300 mb-2"></i>
                             <p class="text-slate-500">拖拽文件到此处，或 <span class="text-blue-600 cursor-pointer" onclick="document.getElementById('file-input').click()">点击选择</span></p>
-                            <p class="text-xs text-slate-400 mt-1">支持 PDF、DOC、DOCX、XLS、XLSX</p>
-                            <input type="file" id="file-input" multiple class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx" onchange="handleFileSelect(event)">
+                            <p class="text-xs text-slate-400 mt-1">支持 DOC/DOCX、XLS/XLSX、CSV、TXT、MD、HTML、PPTX、XMind、FreeMind、OPML</p>
+                            <input type="file" id="file-input" multiple class="hidden" accept=".doc,.docx,.xls,.xlsx,.csv,.txt,.md,.markdown,.mark,.html,.pptx,.xmind,.mm,.opml" onchange="handleFileSelect(event)">
                         </div>
                     </div>
                     <div id="file-list" class="space-y-2">
@@ -1809,7 +1809,7 @@
         }
 
         function addFiles(files) {
-            const validTypes = ['.pdf', '.doc', '.docx', '.xls', '.xlsx'];
+            const validTypes = ['.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt', '.md', '.markdown', '.mark', '.html', '.pptx', '.xmind', '.mm', '.opml'];
             files.forEach(file => {
                 const ext = '.' + file.name.split('.').pop().toLowerCase();
                 if (validTypes.includes(ext)) {
